@@ -6,7 +6,7 @@
  */
 
 const CONFIG = Object.freeze({
-  API_URL: "PASTE_YOUR_APPS_SCRIPT_WEB_APP_EXEC_URL_HERE",
+  API_URL: "https://script.google.com/macros/s/AKfycbztW9EpvHlmSFdTB5_0Mb_dkNJ_0iAGEKxzE3SqnTXUf1tq6thCAaE0yw_g0vJ0zRcu/exec",
   GAME_SECONDS: 180,
   CALIBRATION_MS: 1400,
   MODEL_TIMEOUT_MS: 30000,
