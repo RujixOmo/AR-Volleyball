@@ -50,6 +50,7 @@ const ui = {
   soundToggle: $("soundToggle"),
   missionCount: $("missionCount"),
   missionProgress: $("missionProgress"),
+  statusPanel: $("statusPanel"),
   statusTitle: $("statusTitle"),
   statusText: $("statusText"),
   progress: $("calibrationProgress"),
@@ -80,6 +81,8 @@ let previousDetectionAt = 0;
 let calibrationMs = 0;
 let currentPose = null;
 let currentUnder = { contactReady: false, good: false, reason: "มองกล้องให้เห็นแขนทั้งสองข้าง" };
+let lastValidPlatform = null;
+let lastValidPlatformAt = 0;
 let ball = null;
 let canvasCssWidth = 0;
 let canvasCssHeight = 0;
@@ -147,6 +150,7 @@ async function startGame() {
   ui.errorModal.classList.add("hidden");
   showScreen(ui.game);
   phase = "calibrating";
+  ui.statusPanel.classList.remove("dismissed");
   resetGameState();
   resizeCanvas();
   setStatus("กำลังขอใช้กล้อง 📷", "โปรดกด Allow เมื่อ Safari ถามสิทธิ์การใช้งานกล้อง");
@@ -181,6 +185,8 @@ function resetGameState() {
   gameStartedAt = 0;
   currentPose = null;
   currentUnder = { contactReady: false, good: false, reason: "มองกล้องให้เห็นแขนทั้งสองข้าง" };
+  lastValidPlatform = null;
+  lastValidPlatformAt = 0;
   ball = null;
   ui.score.textContent = "0";
   ui.combo.textContent = "x0";
@@ -346,6 +352,14 @@ function gameLoop(timestamp) {
       currentUnder = currentPose
         ? evaluateUnderPass(currentPose)
         : { contactReady: false, good: false, reason: "ไม่พบร่างกาย กรุณาถอยให้เห็นช่วงบนและแขน" };
+
+      // Keep the last valid platform briefly so a single missed AI frame
+      // does not immediately make a legitimate ball contact fail.
+      if (currentUnder.contactReady && currentUnder.platform) {
+        lastValidPlatform = currentUnder.platform;
+        lastValidPlatformAt = timestamp;
+      }
+
       handleCalibration(timestamp);
     } catch (error) {
       console.error("Pose detection error:", error);
@@ -477,6 +491,11 @@ function handleCalibration(timestamp) {
     gameStartedAt = timestamp;
     previousAnimationAt = timestamp;
     spawnBall();
+
+    // The large calibration card is only for setup. Fade it away during play.
+    window.setTimeout(() => {
+      if (phase === "playing") ui.statusPanel.classList.add("dismissed");
+    }, 1500);
   }
 }
 
@@ -540,7 +559,7 @@ function drawSkeleton(pose) {
 function spawnBall() {
   const width = canvasCssWidth;
   const radius = Math.max(25, Math.min(width, canvasCssHeight) * 0.055);
-  const platformCenter = currentUnder.platform?.center;
+  const platformCenter = currentUnder.platform?.center || lastValidPlatform?.center;
   const targetX = platformCenter ? platformCenter.x : width * 0.5;
   // Start nearly above the player's receiving platform. Variation grows gently with score.
   const spread = Math.min(width * 0.055, score * 1.2);
@@ -573,11 +592,17 @@ function updateBall(dt) {
     ball.vx = -Math.abs(ball.vx) * 0.65;
   }
 
-  if (!ball.scored && currentUnder.contactReady && currentUnder.platform && ball.vy > 0) {
-    const { a, b, forearms } = currentUnder.platform;
+  const platformForHit = currentUnder.contactReady && currentUnder.platform
+    ? currentUnder.platform
+    : (lastValidPlatform && (performance.now() - lastValidPlatformAt) <= 750
+        ? lastValidPlatform
+        : null);
 
-    // A forgiving hit region around both forearms and the space between them.
-    const extra = Math.max(CONFIG.COLLISION_EXTRA_RADIUS, canvasCssHeight * 0.055);
+  if (!ball.scored && platformForHit && ball.vy > 0) {
+    const { a, b, forearms } = platformForHit;
+
+    // More forgiving hit zone for phone-camera framing and small pose jitter.
+    const extra = Math.max(CONFIG.COLLISION_EXTRA_RADIUS, canvasCssHeight * 0.075);
     const tolerance = ball.radius + extra;
 
     const acrossPlatform = pointToSegmentDistance(ball.x, ball.y, a.x, a.y, b.x, b.y);
