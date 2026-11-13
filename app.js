@@ -16,7 +16,12 @@ const CONFIG = Object.freeze({
   MAX_WRIST_TO_SHOULDER_RATIO: 0.90,
   GOOD_WRIST_TO_SHOULDER_RATIO: 0.66,
   MIN_LANDMARK_VISIBILITY: 0.42,
-  COLLISION_EXTRA_RADIUS: 62,
+  COLLISION_EXTRA_RADIUS: 24,
+  BALL_GRAVITY: 760,
+  BALL_RESTITUTION: 0.78,
+  BALL_TANGENT_FRICTION: 0.035,
+  BALL_MAX_SPEED: 1250,
+  PLATFORM_GRACE_MS: 320,
   SHOW_SKELETON: true,
   SHOW_HIT_ZONE: true
 });
@@ -83,6 +88,7 @@ let currentPose = null;
 let currentUnder = { contactReady: false, good: false, reason: "มองกล้องให้เห็นแขนทั้งสองข้าง" };
 let lastValidPlatform = null;
 let lastValidPlatformAt = 0;
+let gameEndReason = "TIME_UP";
 let ball = null;
 let canvasCssWidth = 0;
 let canvasCssHeight = 0;
@@ -187,6 +193,7 @@ function resetGameState() {
   currentUnder = { contactReady: false, good: false, reason: "มองกล้องให้เห็นแขนทั้งสองข้าง" };
   lastValidPlatform = null;
   lastValidPlatformAt = 0;
+  gameEndReason = "TIME_UP";
   ball = null;
   ui.score.textContent = "0";
   ui.combo.textContent = "x0";
@@ -353,8 +360,6 @@ function gameLoop(timestamp) {
         ? evaluateUnderPass(currentPose)
         : { contactReady: false, good: false, reason: "ไม่พบร่างกาย กรุณาถอยให้เห็นช่วงบนและแขน" };
 
-      // Keep the last valid platform briefly so a single missed AI frame
-      // does not immediately make a legitimate ball contact fail.
       if (currentUnder.contactReady && currentUnder.platform) {
         lastValidPlatform = currentUnder.platform;
         lastValidPlatformAt = timestamp;
@@ -371,6 +376,7 @@ function gameLoop(timestamp) {
     const remaining = Math.max(0, CONFIG.GAME_SECONDS - (timestamp - gameStartedAt) / 1000);
     ui.timer.textContent = formatTime(remaining);
     if (remaining <= 0) {
+      gameEndReason = "TIME_UP";
       finishGame(true);
       return;
     }
@@ -492,10 +498,10 @@ function handleCalibration(timestamp) {
     previousAnimationAt = timestamp;
     spawnBall();
 
-    // The large calibration card is only for setup. Fade it away during play.
+    // Hide the large calibration card so it no longer blocks the playing area.
     window.setTimeout(() => {
       if (phase === "playing") ui.statusPanel.classList.add("dismissed");
-    }, 1500);
+    }, 1400);
   }
 }
 
@@ -503,7 +509,10 @@ function handleCalibration(timestamp) {
 function renderFrame() {
   ctx.clearRect(0, 0, canvasCssWidth, canvasCssHeight);
   if (currentPose && CONFIG.SHOW_SKELETON) drawSkeleton(currentPose);
-  if (ball) drawVolleyball(ball.x, ball.y, ball.radius);
+  if (ball) {
+    drawBallTrail(ball);
+    drawVolleyball(ball.x, ball.y, ball.radius, ball.angle);
+  }
 }
 
 function drawSkeleton(pose) {
@@ -555,110 +564,365 @@ function drawSkeleton(pose) {
   ctx.restore();
 }
 
-/* BALL PHYSICS AND COLLISION */
+/* REALISTIC BALL PHYSICS AND CONTACT-ANGLE COLLISION
+ *
+ * The ball is a single continuous object:
+ * - It falls under gravity.
+ * - The closest point on the forearm platform defines the contact normal.
+ * - Incoming velocity is reflected around that normal (with restitution).
+ * - Tangential velocity is mostly preserved, so an off-centre hit changes the
+ *   outgoing direction naturally instead of adding a random horizontal impulse.
+ * - The same ball comes back down for the next under-pass.
+ * - If the whole ball leaves any edge of the visible screen, the match ends.
+ */
+
 function spawnBall() {
   const width = canvasCssWidth;
   const radius = Math.max(25, Math.min(width, canvasCssHeight) * 0.055);
   const platformCenter = currentUnder.platform?.center || lastValidPlatform?.center;
   const targetX = platformCenter ? platformCenter.x : width * 0.5;
-  // Start nearly above the player's receiving platform. Variation grows gently with score.
-  const spread = Math.min(width * 0.055, score * 1.2);
-  const variation = (Math.random() - 0.5) * spread * 2;
+
+  // Keep the ball inside the visible court at spawn. It must not begin off-screen
+  // because leaving the screen is now an immediate game-over condition.
+  const spread = Math.min(width * 0.10, 26 + score * 1.4);
+  const variation = (Math.random() - 0.5) * spread;
+  const spawnX = clamp(targetX + variation, radius + 8, width - radius - 8);
 
   ball = {
-    x: clamp(targetX + variation, radius + 10, width - radius - 10),
-    y: -radius - 8,
-    vx: (Math.random() - 0.5) * 10,
-    vy: 115 + Math.min(score * 2, 60),
+    x: spawnX,
+    y: radius + 12,
+    vx: clamp((targetX - spawnX) * 0.28, -32, 32),
+    vy: 105 + Math.min(score * 2.5, 100),
     radius,
-    scored: false
+    angle: 0,
+    spin: 0,
+    hitLocked: false,
+    hitAt: 0,
+    trail: []
   };
 }
 
-function updateBall(dt) {
-  if (!ball) return;
-
-  const gravity = 500;
-  ball.x += ball.vx * dt;
-  ball.y += ball.vy * dt;
-  ball.vy += gravity * dt;
-
-  // Keep the ball inside the visible play area.
-  if (ball.x < ball.radius) {
-    ball.x = ball.radius;
-    ball.vx = Math.abs(ball.vx) * 0.65;
-  } else if (ball.x > canvasCssWidth - ball.radius) {
-    ball.x = canvasCssWidth - ball.radius;
-    ball.vx = -Math.abs(ball.vx) * 0.65;
+function getPlatformForCollision(timestamp) {
+  if (currentUnder.contactReady && currentUnder.platform) {
+    return currentUnder.platform;
   }
 
-  const platformForHit = currentUnder.contactReady && currentUnder.platform
-    ? currentUnder.platform
-    : (lastValidPlatform && (performance.now() - lastValidPlatformAt) <= 750
-        ? lastValidPlatform
-        : null);
+  if (
+    lastValidPlatform &&
+    timestamp - lastValidPlatformAt <= CONFIG.PLATFORM_GRACE_MS
+  ) {
+    return lastValidPlatform;
+  }
 
-  if (!ball.scored && platformForHit && ball.vy > 0) {
-    const { a, b, forearms } = platformForHit;
+  return null;
+}
 
-    // More forgiving hit zone for phone-camera framing and small pose jitter.
-    const extra = Math.max(CONFIG.COLLISION_EXTRA_RADIUS, canvasCssHeight * 0.075);
-    const tolerance = ball.radius + extra;
+function closestPointOnSegment(px, py, a, b) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const lengthSquared = dx * dx + dy * dy;
 
-    const acrossPlatform = pointToSegmentDistance(ball.x, ball.y, a.x, a.y, b.x, b.y);
-    const leftForearm = pointToSegmentDistance(ball.x, ball.y,
-      forearms[0].a.x, forearms[0].a.y, forearms[0].b.x, forearms[0].b.y);
-    const rightForearm = pointToSegmentDistance(ball.x, ball.y,
-      forearms[1].a.x, forearms[1].a.y, forearms[1].b.x, forearms[1].b.y);
+  if (lengthSquared < 0.0001) {
+    return { x: a.x, y: a.y, t: 0 };
+  }
 
-    const hitDistance = Math.min(acrossPlatform, leftForearm, rightForearm);
+  const t = clamp(
+    ((px - a.x) * dx + (py - a.y) * dy) / lengthSquared,
+    0,
+    1
+  );
 
-    if (hitDistance <= tolerance) {
-      registerHit();
-      return;
+  return {
+    x: a.x + t * dx,
+    y: a.y + t * dy,
+    t
+  };
+}
+
+function getNearestPlatformContact(targetBall, platform) {
+  const segments = [
+    { a: platform.forearms[0].a, b: platform.forearms[0].b, name: "left-forearm" },
+    { a: platform.forearms[1].a, b: platform.forearms[1].b, name: "right-forearm" },
+    { a: platform.a, b: platform.b, name: "forearm-platform" }
+  ];
+
+  let best = null;
+
+  for (const segment of segments) {
+    const closest = closestPointOnSegment(
+      targetBall.x,
+      targetBall.y,
+      segment.a,
+      segment.b
+    );
+
+    const dx = targetBall.x - closest.x;
+    const dy = targetBall.y - closest.y;
+    const distanceToSegment = Math.hypot(dx, dy);
+
+    if (!best || distanceToSegment < best.distance) {
+      best = {
+        ...segment,
+        closest,
+        distance: distanceToSegment
+      };
     }
   }
 
-  if (ball.scored && ball.y < -ball.radius * 2) {
-    spawnBall();
-    return;
+  if (!best) return null;
+
+  const extra = Math.max(
+    CONFIG.COLLISION_EXTRA_RADIUS,
+    Math.min(34, canvasCssHeight * 0.018)
+  );
+  const contactDistance = targetBall.radius + extra;
+
+  if (best.distance > contactDistance) return null;
+
+  // Normal points from the closest point on the forearm surface toward the
+  // ball centre. If the centre is almost exactly on the segment, use its
+  // perpendicular and orient it against the incoming velocity.
+  let nx;
+  let ny;
+
+  if (best.distance > 0.5) {
+    nx = (targetBall.x - best.closest.x) / best.distance;
+    ny = (targetBall.y - best.closest.y) / best.distance;
+  } else {
+    const sx = best.b.x - best.a.x;
+    const sy = best.b.y - best.a.y;
+    const segmentLength = Math.hypot(sx, sy) || 1;
+    nx = -sy / segmentLength;
+    ny = sx / segmentLength;
   }
 
-  if (ball.y > canvasCssHeight + ball.radius * 2) {
-    combo = 0;
-    ui.combo.textContent = "x0";
-    ui.tip.textContent = "ลูกตกแล้ว! จัดแนวท่อนแขนให้พร้อมสำหรับลูกถัดไป";
-    spawnBall();
+  let normalVelocity = targetBall.vx * nx + targetBall.vy * ny;
+
+  // The normal must face against the incoming motion, otherwise the object
+  // is moving away from the surface and should not be counted as a new hit.
+  if (normalVelocity > 0) {
+    nx *= -1;
+    ny *= -1;
+    normalVelocity *= -1;
+  }
+
+  if (normalVelocity > -18) return null;
+
+  const tangentX = -ny;
+  const tangentY = nx;
+  const tangentVelocity =
+    targetBall.vx * tangentX +
+    targetBall.vy * tangentY;
+
+  return {
+    ...best,
+    nx,
+    ny,
+    tangentX,
+    tangentY,
+    normalVelocity,
+    tangentVelocity,
+    extra
+  };
+}
+
+function distanceFromBallToPlatform(targetBall, platform) {
+  const contact = getNearestPlatformContact(
+    {
+      ...targetBall,
+      // For separation testing, do not require incoming velocity.
+      vx: 0,
+      vy: 1
+    },
+    platform
+  );
+
+  if (contact) return contact.distance;
+
+  const segments = [
+    { a: platform.forearms[0].a, b: platform.forearms[0].b },
+    { a: platform.forearms[1].a, b: platform.forearms[1].b },
+    { a: platform.a, b: platform.b }
+  ];
+
+  return Math.min(...segments.map(segment => {
+    const p = closestPointOnSegment(targetBall.x, targetBall.y, segment.a, segment.b);
+    return Math.hypot(targetBall.x - p.x, targetBall.y - p.y);
+  }));
+}
+
+function updateBall(dt) {
+  if (!ball || phase !== "playing") return;
+
+  const safeDt = clamp(dt, 0, 0.05);
+  const timestamp = performance.now();
+
+  // Integrate gravity and air resistance in seconds/pixels.
+  ball.vy += CONFIG.BALL_GRAVITY * safeDt;
+  const airDrag = Math.exp(-0.035 * safeDt);
+  ball.vx *= airDrag;
+
+  ball.x += ball.vx * safeDt;
+  ball.y += ball.vy * safeDt;
+  ball.angle += ball.spin * safeDt;
+  ball.spin *= Math.exp(-1.25 * safeDt);
+
+  // Keep a short trail so the player can read the direction and speed.
+  ball.trail.push({ x: ball.x, y: ball.y, life: 1 });
+  if (ball.trail.length > 7) ball.trail.shift();
+  ball.trail.forEach(point => { point.life *= 0.78; });
+
+  const platform = getPlatformForCollision(timestamp);
+
+  // Only contact the platform while the ball is descending.
+  if (
+    !ball.hitLocked &&
+    platform &&
+    ball.vy > 0
+  ) {
+    const contact = getNearestPlatformContact(ball, platform);
+
+    if (contact) {
+      registerHit(contact);
+      if (!running || phase !== "playing") return;
+    }
+  }
+
+  // Unlock the same ball only after it has clearly separated from the arms.
+  // This allows it to rise, fall back, and be passed again without double hits.
+  if (ball.hitLocked && timestamp - ball.hitAt > 180) {
+    const activePlatform = getPlatformForCollision(timestamp);
+    if (activePlatform) {
+      const separation = distanceFromBallToPlatform(ball, activePlatform);
+      const unlockDistance = ball.radius + CONFIG.COLLISION_EXTRA_RADIUS + 22;
+      if (separation > unlockDistance) {
+        ball.hitLocked = false;
+      }
+    } else if (timestamp - ball.hitAt > 900) {
+      ball.hitLocked = false;
+    }
+  }
+
+  // Leaving the visible play area in ANY direction ends the match.
+  // There are no invisible side-wall rebounds and no automatic replacement balls.
+  const r = ball.radius;
+  let outReason = null;
+
+  if (ball.x + r < 0) outReason = "BALL_OUT_LEFT";
+  else if (ball.x - r > canvasCssWidth) outReason = "BALL_OUT_RIGHT";
+  else if (ball.y + r < 0) outReason = "BALL_OUT_TOP";
+  else if (ball.y - r > canvasCssHeight) outReason = "BALL_OUT_BOTTOM";
+
+  if (outReason) {
+    gameEndReason = outReason;
+    ui.tip.textContent = "ลูกบอลออกนอกสนาม! จบการแข่งขัน";
+    finishGame(true);
+    return;
   }
 }
 
-function registerHit() {
-  if (!ball || ball.scored) return;
+function registerHit(contact) {
+  if (!ball || ball.hitLocked || phase !== "playing") return;
 
-  ball.scored = true;
-  ball.vy = -Math.max(340, canvasCssHeight * 0.56);
-  ball.vx += (Math.random() - 0.5) * 45;
+  /*
+   * Contact-angle response:
+   * Resolve incoming velocity into the contact normal and tangent.
+   * Reflect the normal component using coefficient of restitution, and
+   * preserve most tangential motion. The contact point therefore controls
+   * whether the ball travels upward-left, nearly straight up, or upward-right.
+   */
+  const restitution = CONFIG.BALL_RESTITUTION;
+  const tangentRetention = 1 - CONFIG.BALL_TANGENT_FRICTION;
+
+  const outgoingNormalSpeed = -contact.normalVelocity * restitution;
+  const outgoingTangentSpeed = contact.tangentVelocity * tangentRetention;
+
+  let nextVx =
+    contact.nx * outgoingNormalSpeed +
+    contact.tangentX * outgoingTangentSpeed;
+
+  let nextVy =
+    contact.ny * outgoingNormalSpeed +
+    contact.tangentY * outgoingTangentSpeed;
+
+  // If the contact is a very shallow edge scrape, add only a small upward
+  // underhand lift. Horizontal direction remains dictated by the impact normal.
+  if (nextVy > -125) {
+    const lift = 125 + Math.max(0, Math.abs(contact.normalVelocity) * 0.12);
+    nextVy = -lift;
+  }
+
+  const speed = Math.hypot(nextVx, nextVy);
+  if (speed > CONFIG.BALL_MAX_SPEED) {
+    const scale = CONFIG.BALL_MAX_SPEED / speed;
+    nextVx *= scale;
+    nextVy *= scale;
+  }
+
+  // Separate the ball from the collision surface to prevent it being counted
+  // again on the same frame.
+  ball.x = contact.closest.x + contact.nx * (ball.radius + 2);
+  ball.y = contact.closest.y + contact.ny * (ball.radius + 2);
+
+  // Spin is generated by the off-centre impact, rather than random direction.
+  const impactOffset = clamp(
+    (
+      (ball.x - contact.closest.x) * contact.tangentX +
+      (ball.y - contact.closest.y) * contact.tangentY
+    ) / Math.max(1, ball.radius),
+    -1,
+    1
+  );
+
+  ball.vx = nextVx;
+  ball.vy = nextVy;
+  ball.spin = clamp(
+    ball.spin + impactOffset * 2.8 + outgoingTangentSpeed / Math.max(1, ball.radius) * 0.12,
+    -8,
+    8
+  );
+  ball.hitLocked = true;
+  ball.hitAt = performance.now();
 
   score += 1;
   combo += 1;
+
   ui.score.textContent = String(score);
   ui.combo.textContent = `x${combo}`;
   ui.missionCount.textContent = `${Math.min(score, 15)} / 15`;
   ui.missionProgress.style.width = `${Math.min(100, score / 15 * 100)}%`;
+
   if (score >= 15) {
     $("missionCount").textContent = "GOAL REACHED!";
   }
+
   ui.tip.textContent = currentUnder.good
     ? (combo >= 3 ? `🔥 ${combo} COMBO! PERFECT UNDER PASS` : "✨ PERFECT UNDER PASS! +1")
-    : "✅ รับลูกได้! ลองเหยียดแขนให้ตรงขึ้นเพื่อท่าที่ดีขึ้น";
+    : "✅ รับลูกได้! ทิศทางลูกขึ้นอยู่กับมุมสัมผัส";
 
   showFeedback(currentUnder.good ? "PERFECT! +1" : "GOOD! +1");
   playScoreSound();
 }
 
-function drawVolleyball(x, y, radius) {
+function drawBallTrail(targetBall) {
+  if (!targetBall.trail || targetBall.trail.length < 2) return;
+
+  ctx.save();
+  targetBall.trail.forEach((point, index) => {
+    const progress = (index + 1) / targetBall.trail.length;
+    const radius = targetBall.radius * (0.15 + progress * 0.18);
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(151, 210, 255, ${0.04 + progress * 0.13})`;
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+function drawVolleyball(x, y, radius, angle = 0) {
   ctx.save();
   ctx.translate(x, y);
+  ctx.rotate(angle);
 
   ctx.beginPath();
   ctx.ellipse(5, radius * 0.86, radius * 0.82, radius * 0.22, 0, 0, Math.PI * 2);
@@ -789,8 +1053,13 @@ async function finishGame(saveResult) {
 
   $("finalScore").textContent = String(score);
   $("resultName").textContent = ui.playerName.value.trim();
-  $("resultHeadline").textContent = score >= 15 ? "ภารกิจสำเร็จ! 🌟" : "ยอดเยี่ยม! ฝึกต่ออีกนิด 💪";
-  $("resultMissionText").textContent = score >= 15 ? "15-POINT MISSION CLEARED" : "MISSION: REACH 15 POINTS";
+  const ballOut = gameEndReason.startsWith("BALL_OUT");
+  $("resultHeadline").textContent = ballOut
+    ? "ลูกออกนอกสนาม! 🏐"
+    : (score >= 15 ? "ภารกิจสำเร็จ! 🌟" : "หมดเวลา! ฝึกต่ออีกนิด 💪");
+  $("resultMissionText").textContent = ballOut
+    ? "BALL OUT · GAME OVER"
+    : (score >= 15 ? "15-POINT MISSION CLEARED" : "TIME UP · FINAL SCORE");
   $("saveStatus").textContent = "กำลังบันทึกคะแนน...";
   showScreen(ui.result);
 
