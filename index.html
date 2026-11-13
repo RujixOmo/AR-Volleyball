@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#07152f">
+  <meta name="description" content="Under Pass Challenge — วิทยาลัยเทคนิคพิษณุโลก">
+  <title>Under Pass Challenge | วิทยาลัยเทคนิคพิษณุโลก</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Kanit:wght@400;500;600;700;800&family=Prompt:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="app-shell">
+
+  <!-- HOME / GAME LANDING -->
+  <section id="homeScreen" class="screen home-screen">
+    <div class="ambient ambient-a"></div>
+    <div class="ambient ambient-b"></div>
+    <div class="speed-line speed-a"></div>
+    <div class="speed-line speed-b"></div>
+    <div class="decor decor-ball" aria-hidden="true">🏐</div>
+    <div class="decor decor-star star-one" aria-hidden="true">⭐</div>
+    <div class="decor decor-star star-two" aria-hidden="true">✨</div>
+
+    <header class="hero">
+      <div class="school-brand">
+        <div class="school-crest" aria-hidden="true">
+          <span>PL</span><small>TC</small>
+        </div>
+        <div class="school-brand-copy">
+          <span class="school-overline">EDUCATIONAL SPORTS EXPERIENCE</span>
+          <strong>วิทยาลัยเทคนิคพิษณุโลก</strong>
+          <small>PHITSANULOK TECHNICAL COLLEGE</small>
+        </div>
+      </div>
+
+      <div class="game-series"><span class="live-dot"></span> PIXAR-INSPIRED · VNL-INSPIRED SPORTS LAB</div>
+      <h1 class="hero-title">UNDER PASS<br><span>CHALLENGE</span></h1>
+      <p class="hero-copy">ภารกิจฝึกทักษะการรับลูกวอลเลย์บอลสองมือล่าง<br>เรียนรู้ผ่านเกมและระบบตรวจจับท่าทางด้วย AI</p>
+      <div class="hero-signature"><span>🏐</span> LEARN · PLAY · LEVEL UP <span>⚡</span></div>
+    </header>
+
+    <section class="mission-card">
+      <div class="mission-glow"></div>
+      <div class="mission-content">
+        <span class="eyebrow">YOUR 3-MINUTE CHALLENGE</span>
+        <h2>พร้อมรับทุกลูก<br><em>พิชิต 15 คะแนน!</em></h2>
+        <p>ประสานมือ เหยียดแขน และรับลูกด้วยแนวท่อนแขน</p>
+        <div class="mission-tags">
+          <span>⏱ 03:00 นาที</span>
+          <span>🎯 เป้าหมาย 15 แต้ม</span>
+        </div>
+      </div>
+      <div class="target-orbit" aria-label="เป้าหมาย 15 คะแนน">
+        <div class="orbit-ring"></div>
+        <div class="orbit-ball">🏐</div>
+        <div class="target-number"><b>15</b><small>POINTS</small></div>
+      </div>
+      <div class="card-shine"></div>
+    </section>
+
+    <section class="player-panel">
+      <div class="section-label">
+        <span class="section-icon">👟</span>
+        <label for="playerName">PLAYER PROFILE <small>ข้อมูลผู้เล่น</small></label>
+      </div>
+      <input id="playerName" type="text" maxlength="30" placeholder="กรอกชื่อเล่นหรือรหัสผู้เล่น" autocomplete="name">
+      <p class="privacy-note">ใช้ชื่อเล่นหรือรหัสผู้เล่น ไม่จำเป็นต้องกรอกข้อมูลส่วนตัว</p>
+    </section>
+
+    <section class="how-card">
+      <div class="how-heading">
+        <div><span class="eyebrow">GAME GUIDE</span><h2>เตรียมตัวก่อนลงสนาม</h2></div>
+        <span class="guide-sticker">LET'S GO!</span>
+      </div>
+      <div class="how-grid">
+        <div class="how-step">
+          <span class="step-number">01</span>
+          <div class="step-emoji">📷</div>
+          <strong>เปิดกล้อง</strong>
+          <small>อนุญาตให้เข้าถึงกล้อง</small>
+        </div>
+        <div class="how-step">
+          <span class="step-number">02</span>
+          <div class="step-emoji">🤝</div>
+          <strong>ประสานมือ</strong>
+          <small>เหยียดแขนไว้ด้านหน้า</small>
+        </div>
+        <div class="how-step">
+          <span class="step-number">03</span>
+          <div class="step-emoji">✨</div>
+          <strong>ปรับเทียบท่า</strong>
+          <small>ค้างท่าประมาณ 1.4 วินาที</small>
+        </div>
+        <div class="how-step">
+          <span class="step-number">04</span>
+          <div class="step-emoji">🏐</div>
+          <strong>รับลูกให้ได้</strong>
+          <small>ลูกหนึ่งลูกได้หนึ่งคะแนน</small>
+        </div>
+      </div>
+    </section>
+
+    <button id="startBtn" class="primary-btn">
+      <span class="button-eyebrow">START YOUR CHALLENGE</span>
+      <strong>เริ่มการแข่งขัน!</strong>
+      <i class="button-arrow">➜</i>
+      <span class="button-sparkle" aria-hidden="true">✦</span>
+    </button>
+
+    <button id="leaderboardBtn" class="secondary-btn">
+      <span class="trophy-icon">🏆</span>
+      <span><b>LEADERBOARD</b><small>ดูอันดับนักกีฬาคะแนนสูงสุด</small></span>
+      <i>↗</i>
+    </button>
+
+    <footer class="school-footer">
+      <div class="footer-rule"></div>
+      <strong>วิทยาลัยเทคนิคพิษณุโลก</strong>
+      <span>PHITSANULOK TECHNICAL COLLEGE</span>
+      <small>EDUCATIONAL GAME · UNOFFICIAL VNL-INSPIRED VISUAL THEME</small>
+    </footer>
+  </section>
+
+  <!-- GAME -->
+  <section id="gameScreen" class="screen game-screen hidden">
+    <video id="webcam" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
+    <div class="game-shade"></div>
+
+    <div class="game-school-tag">
+      <span class="mini-crest">PL</span>
+      <span>วิทยาลัยเทคนิคพิษณุโลก</span>
+    </div>
+
+    <header class="game-hud">
+      <div class="hud-tile score-tile"><span>YOUR SCORE</span><b id="score">0</b></div>
+      <div class="hud-middle"><span>UNDER PASS</span><b id="phaseLabel">CALIBRATION</b></div>
+      <div class="hud-tile time-tile"><span>TIME LEFT</span><b id="timer">03:00</b></div>
+    </header>
+
+    <div class="mission-strip">
+      <div class="mission-top"><span>🎯 MISSION: REACH 15 POINTS</span><b id="missionCount">0 / 15</b></div>
+      <div class="mission-track"><div id="missionProgress" class="mission-fill"></div></div>
+    </div>
+
+    <div class="combo-chip"><span>🔥 COMBO</span><b id="combo">x0</b></div>
+    <button id="soundToggle" class="sound-toggle" type="button" aria-label="เปิดหรือปิดเสียง">🔊 <span>เสียง</span></button>
+
+    <div id="statusPanel" class="status-panel">
+      <div class="status-emoji">🤝</div>
+      <strong id="statusTitle">กำลังเตรียมกล้อง</strong>
+      <span id="statusText">โปรดอนุญาตให้เว็บไซต์ใช้กล้อง</span>
+      <div class="calibration-track"><div id="calibrationProgress" class="calibration-fill"></div></div>
+    </div>
+
+    <div id="feedback" class="feedback hidden">GREAT! +1</div>
+    <div id="tipBubble" class="tip-bubble">จัดแนวท่อนแขนให้พร้อมรับลูก!</div>
+    <button id="exitBtn" class="exit-btn" aria-label="ออกจากเกม">✕</button>
+  </section>
+
+  <!-- RESULT -->
+  <section id="resultScreen" class="screen result-screen hidden">
+    <div class="result-confetti confetti-a">✦</div><div class="result-confetti confetti-b">✧</div>
+    <div class="result-ball" aria-hidden="true">🏐</div>
+    <div class="result-card">
+      <div class="result-school">วิทยาลัยเทคนิคพิษณุโลก</div>
+      <span class="result-kicker">MISSION COMPLETE</span>
+      <div class="result-trophy">🏆</div>
+      <h2 id="resultHeadline">ยอดเยี่ยม!</h2>
+      <p id="resultName" class="result-name">PLAYER</p>
+      <div class="result-score-box">
+        <span>FINAL SCORE</span>
+        <b id="finalScore">0</b>
+        <small id="resultMissionText">MISSION: REACH 15 POINTS</small>
+      </div>
+      <p id="saveStatus" class="save-status">กำลังบันทึกคะแนน...</p>
+      <button id="playAgainBtn" class="primary-btn"><span class="button-eyebrow">PLAY AGAIN</span><strong>เล่นอีกครั้ง!</strong><i class="button-arrow">↻</i></button>
+      <button id="resultLeaderboardBtn" class="secondary-btn result-secondary"><span class="trophy-icon">🏆</span><span><b>LEADERBOARD</b><small>ดูอันดับคะแนน</small></span><i>↗</i></button>
+      <footer class="result-footer">PHITSANULOK TECHNICAL COLLEGE</footer>
+    </div>
+  </section>
+
+  <!-- LEADERBOARD -->
+  <div id="leaderboardModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <button id="closeLeaderboard" class="close-modal" aria-label="ปิด">✕</button>
+      <div class="modal-trophy">🏆</div>
+      <span class="modal-kicker">PHITSANULOK TECHNICAL COLLEGE</span>
+      <h2>LEADERBOARD</h2>
+      <p class="modal-subtitle">10 อันดับผู้เล่นคะแนนสูงสุด</p>
+      <ol id="leaderboardList" class="leaderboard-list"><li>กำลังโหลด...</li></ol>
+    </div>
+  </div>
+
+  <!-- ERROR -->
+  <div id="errorModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card error-card">
+      <div class="modal-trophy">📷</div>
+      <h2 id="errorTitle">เกิดข้อผิดพลาด</h2>
+      <p id="errorText"></p>
+      <button id="closeError" class="primary-btn modal-button"><b>ปิดข้อความ</b></button>
+    </div>
+  </div>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
